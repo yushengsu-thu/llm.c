@@ -29,6 +29,6 @@ dev/cuda/nccl_all_reduce
 *.log
 
 # Additional 
-Makefile_cuda12.1
+Makefile_cuda_12.1
 nccl
 launch.sh
