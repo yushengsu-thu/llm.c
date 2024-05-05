@@ -32,3 +32,4 @@ dev/cuda/nccl_all_reduce
 Makefile_cuda_12.1
 nccl
 launch.sh
+run.sh
