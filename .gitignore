@@ -33,3 +33,4 @@ Makefile_cuda_12.1
 nccl
 launch.sh
 run.sh
+git_push.sh
