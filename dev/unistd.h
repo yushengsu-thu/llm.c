@@ -4,11 +4,15 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _USE_MATH_DEFINES
+#define WIN32_LEAN_AND_MEAN
 
 #include <stdio.h>
 #include <math.h>
-//#define gen_max_length 64 // compile as C++ to skip this VLA issue
 #include <time.h>
+#include <stdlib.h> // for malloc and free
+#include <string.h>
+#include <direct.h> // for _mkdir and _stat
+#include <io.h> // needed for _access below and _findfirst, _findnext, _findclose
 
 #define CLOCK_MONOTONIC 0
 static inline int clock_gettime(int ignore_variable, struct timespec* tv)
@@ -17,14 +21,12 @@ static inline int clock_gettime(int ignore_variable, struct timespec* tv)
 }
 
 #define OMP /* turn it on */
-#include <io.h> /* needed for access below */
 #define F_OK 0
 #define access _access
 
 #define TURN_OFF_FP_FAST __pragma(float_control( precise, on, push )) // Save current setting and turn on /fp:precise
 #define TURN_ON_FP_FAST  __pragma(float_control(pop)) // Restore file's default settings
 
-#include <direct.h> /* for _mkdir and _stat */
 #define mkdir(path, mode) _mkdir(path) /* sketchy way to get mkdir to work on windows */
 #define stat _stat
 
@@ -59,7 +61,7 @@ static inline int glob(const char* pattern, int ignored_flags, int (*ignored_err
 
     replace_forward_slashes (pattern_copy); // Replace forward slashes with backslashes
 
-    if (strchr(pattern_copy, '\\') != NULL) {
+    if (strchr(pattern_copy, '\\') != (void*) NULL) {
         strncpy_s(directory_path, sizeof(directory_path) - 1, pattern_copy, strrchr(pattern_copy, '\\') - pattern_copy + 1);
         directory_path[strrchr(pattern_copy, '\\') - pattern_copy + 1] = '\0';
     }
@@ -104,4 +106,65 @@ static inline int glob(const char* pattern, int ignored_flags, int (*ignored_err
     return 0;
 }
 
-#endif
+// dirent.h support
+
+#define MAX_PATH_LENGTH 512
+typedef struct dirent {
+    char d_name[MAX_PATH_LENGTH];
+} dirent;
+
+typedef struct DIR {
+    intptr_t handle;
+    struct _finddata_t findFileData;
+    int firstRead;
+} DIR;
+
+static inline DIR *opendir(const char *name) {
+    DIR *dir = (DIR *)malloc(sizeof(DIR));
+    if (dir == NULL) {
+        return NULL;
+    }
+
+    char searchPath[MAX_PATH_LENGTH];
+
+    snprintf(searchPath, MAX_PATH_LENGTH, "%s\\*.*", name);
+
+    dir->handle = _findfirst(searchPath, &dir->findFileData);
+    if (dir->handle == -1) {
+        free(dir);
+        return NULL;
+    }
+
+    dir->firstRead = 1;
+    return dir;
+}
+
+static inline struct dirent *readdir(DIR *directory) {
+    static struct dirent result;
+
+    if (directory->firstRead) {
+        directory->firstRead = 0;
+    } else {
+        if (_findnext(directory->handle, &directory->findFileData) != 0) {
+            return NULL;
+        }
+    }
+
+    strncpy(result.d_name, directory->findFileData.name, MAX_PATH_LENGTH);
+    result.d_name[MAX_PATH_LENGTH - 1] = '\0'; // Ensure null termination
+    return &result;
+}
+
+static inline int closedir(DIR *directory) {
+    if (directory == NULL) {
+        return -1;
+    }
+
+    if (_findclose(directory->handle) != 0) {
+        return -1;
+    }
+
+    free(directory);
+    return 0;
+}
+#endif // UNISTD_H
